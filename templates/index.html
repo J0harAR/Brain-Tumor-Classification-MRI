@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <title>Perros y Gatos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <style>
+        #resultado {
+            font-weight: bold;
+            font-size: 6rem;
+            text-align: center;
+        }
+
+        #resultados-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .resultado {
+            text-align: center;
+            margin: 10px;
+        }
+
+        #drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        #drop-area.highlight {
+            border-color: #007bff;
+            background-color: #f0faff;
+        }
+
+        .imagen-con-prediccion {
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        .imagen-prediccion {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+        }
+
+        #contenedor-imagenes {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <div class="text-center">
+            <h1 class="display-4 fw-bold">Brain Tumor Classification (MRI)</h1>
+            <p class="lead">Clasificación de tumores cerebrales utilizando imágenes de resonancia magnética.</p>
+        </div>
+
+
+        <div class="container mt-5">
+            <div class="row">
+                <div class="col-12 col-md-6 offset-md-3 text-center">
+                    <div id="drop-area" class="mb-3" ondragover="handleDragOver(event)"
+                        ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                        Arrastra y suelta las imágenes aquí o haz clic para seleccionar
+                        <input type="file" id="imagen-input" style="display: none" multiple>
+                    </div>
+                    <button type="button" class="btn btn-primary mb-2" onclick="predecirDesdeImagen()">Hacer
+                        predicción</button>
+                    <div id="contenedor-imagenes"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal para mostrar imágenes -->
+        <div class="modal fade" id="imagenModal" tabindex="-1" role="dialog" aria-labelledby="imagenModalLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        <img id="modalImagen" src="" alt="Imagen">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="text-center">
+            <button class="btn btn-primary mb-2" onclick="descargarZIP()">Guardar</button>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0/dist/tf.min.js"></script>
+
+    <script type="text/javascript">
+        var imagenes = [];
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            document.getElementById('drop-area').classList.add('highlight');
+        }
+
+        function handleDragLeave(event) {
+            event.preventDefault();
+            document.getElementById('drop-area').classList.remove('highlight');
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            document.getElementById('drop-area').classList.remove('highlight');
+            var files = event.dataTransfer.files;
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            for (var i = 0; i < files.length; i++) {
+                var reader = new FileReader();
+
+                reader.onload = function (e) {
+                    var imagen = {
+                        dataURL: e.target.result,
+                        resultado: null
+                    };
+                    imagenes.push(imagen);
+                    actualizarVistaImagenes();
+                };
+
+                reader.readAsDataURL(files[i]);
+            }
+        }
+
+        function mostrarImagenModal(index) {
+            var modalImagen = document.getElementById('modalImagen');
+            modalImagen.src = imagenes[index].dataURL;
+            $('#imagenModal').modal('show');
+        }
+
+        function actualizarVistaImagenes() {
+            var contenedorImagenes = document.getElementById('contenedor-imagenes');
+            contenedorImagenes.innerHTML = ""; // Limpiar el contenedor
+
+            for (let i = 0; i < imagenes.length; i++) {
+                var divImagen = document.createElement('div');
+                divImagen.className = 'imagen-con-prediccion';
+                divImagen.onclick = function () {
+                    mostrarImagenModal(i);
+                };
+
+                var img = document.createElement('img');
+                img.src = imagenes[i].dataURL;
+                img.alt = 'Imagen previa';
+                img.className = 'imagen-prediccion';
+
+                var resultado = document.createElement('p');
+                resultado.innerHTML = `Predicción: ${imagenes[i].resultado}`;
+
+                divImagen.appendChild(img);
+                divImagen.appendChild(resultado);
+                contenedorImagenes.appendChild(divImagen);
+            }
+        }
+
+        async function predecirDesdeImagen() {
+            for (let i = 0; i < imagenes.length; i++) {
+                await fetch('http://localhost:5000/predict_image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ imagen_data_url: imagenes[i].dataURL }),
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        imagenes[i].resultado = data.prediction;
+                        actualizarVistaImagenes();
+                    })
+                    .catch((error) => {
+                        console.error('Error:', error);
+                        // Manejar el error según tus necesidades
+                    });
+            }
+        }
+        function descargarZIP() {
+            var zip = new JSZip();
+
+            for (let i = 0; i < imagenes.length; i++) {
+                var dataURL = imagenes[i].dataURL;
+                var resultado = imagenes[i].resultado || "No clasificado"; // Si no hay resultado, poner "No clasificado"
+                var tipoTumor = resultado.replace(/ /g, "_"); // Reemplazar espacios con guiones bajos
+
+                // Crear una carpeta en el ZIP para cada tipo de tumor
+                var carpeta = zip.folder(tipoTumor);
+
+                // Agregar la imagen al ZIP
+                carpeta.file(`imagen_${i + 1}.png`, dataURL.split(',')[1], { base64: true });
+            }
+
+            // Generar el archivo ZIP y descargarlo
+            zip.generateAsync({ type: "blob" })
+                .then(function (blob) {
+                    saveAs(blob, "imagenes_con_prediccion.zip");
+                });
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.6.0/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+</body>
+
+</html>
